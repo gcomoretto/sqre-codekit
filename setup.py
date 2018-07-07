@@ -66,6 +66,7 @@ setup(
             'github-mv-repos-to-team = codekit.cli.github_mv_repos_to_team:main',  # NOQA
             'github-tag-release = codekit.cli.github_tag_release:main',
             'github-tag-teams = codekit.cli.github_tag_teams:main',
+            'github-tree = codekit.cli.github_tree:main',
         ]
     }
 )
