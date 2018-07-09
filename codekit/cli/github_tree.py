@@ -9,8 +9,6 @@ import os
 import sys
 import textwrap
 
-
-
 def parse_args():
     """Parse command-line arguments"""
     prog = 'github-tree'
@@ -63,16 +61,24 @@ def get_deps(git_repo):
     table2=table1.split('\n')
     #print(table2)
     #
+    global i
+    global Ptree
     ltree = []
     ldeps = []
     for line in table2:
       nodes=line.split('(')
       #if nodes[0] == "setupRequired":
       if nodes[0] in ("setupRequired", "setupOptional"):
-        print(nodes[1].replace(')','')+",", git_repo.name+",")
-        ltree.append(nodes[1].replace(')',''))
-        depOBJ=org.get_repo(nodes[1].replace(')',''))
-        ldeps.append(get_deps(depOBJ))
+        child = nodes[1].replace(')','')
+        parent = git_repo.name
+        if [child, parent] not in Ptree:
+          i = i+1
+          print(i, child+",", parent)
+          Ptree = Ptree + [[child, parent]]
+          ltree.append(nodes[1].replace(')',''))
+          depOBJ=org.get_repo(nodes[1].replace(')',''))
+          ldeps.append(get_deps(depOBJ))
+
     return(ltree, ldeps)
 
 def run():
@@ -89,35 +95,19 @@ def run():
 
     repo =  org.get_repo(args.repository)
 
+    global i
+    global Ptree
+
+    Ptree = [[]]
+
+    i = 0
+
+    print(i, args.repository, "ORG-"+args.organization)
+    #Ptree = [['node', 'parent'],
+    Ptree =  [[args.repository, "ORG-"+args.organization]]
     tree = get_deps(repo)
 
-
-#    try:
-#        repos = list(org.get_repos())
-#    except github.RateLimitExceededException:
-#        raise
-#    except github.GithubException as e:
-#        msg = 'error getting repos'
-#        raise pygithub.CaughtOrganizationError(org, e, msg) from None
-#
-#    for r in repos:
-#        try:
-#            teamnames = [t.name for t in r.get_teams()
-#                         if t.name not in args.hide]
-#        except github.RateLimitExceededException:
-#            raise
-#        except github.GithubException as e:
-#            msg = 'error getting teams'
-#            raise pygithub.CaughtRepositoryError(r, e, msg) from None
-#
-#        maxt = args.maxt if (args.maxt is not None and
-#                             args.maxt >= 0) else len(teamnames)
-#        if args.debug:
-#            print("MAXT=", maxt)
-#
-#        if args.mint <= len(teamnames) <= maxt:
-#            print(r.name.ljust(40) + args.delimiter.join(teamnames))
-
+    print(len(Ptree))
 
 def main():
     try:
