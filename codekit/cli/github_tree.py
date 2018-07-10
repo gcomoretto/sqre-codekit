@@ -75,11 +75,16 @@ def get_deps(git_repo):
           i = i+1
           print(i, child+",", parent)
           Ptree = Ptree + [[child, parent]]
-          ltree.append(nodes[1].replace(')',''))
-          depOBJ=org.get_repo(nodes[1].replace(')',''))
-          ldeps.append(get_deps(depOBJ))
+          try:
+              depOBJ=org.get_repo(child)
+          except:
+              print('Warning: Invalid dependency '+child+' in parent '+parent)
+          else:
+              get_deps(depOBJ)
 
-    return(ltree, ldeps)
+    return()
+
+
 
 def run():
     """List repos and teams"""
@@ -88,26 +93,32 @@ def run():
     codetools.setup_logging(args.debug)
 
     global g
-    g = pygithub.login_github(token_path=args.token_path, token=args.token)
-
     global org
-    org = g.get_organization(args.organization)
-
-    repo =  org.get_repo(args.repository)
-
     global i
     global Ptree
 
-    Ptree = [[]]
+    g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
-    i = 0
+    try:
+        org = g.get_organization(args.organization)
+    except:
+        print("Invalid organization ", args.organization)
 
-    print(i, args.repository, "ORG-"+args.organization)
-    #Ptree = [['node', 'parent'],
-    Ptree =  [[args.repository, "ORG-"+args.organization]]
-    tree = get_deps(repo)
+    try:
+        repo =  org.get_repo(args.repository)
+    except:
+        print("Invalid repository ", args.repository)
+    else:
+        Ptree = [[]]
+  
+        i = 0
 
-    print(len(Ptree))
+        print(i, args.repository, "ORG-"+args.organization)
+        Ptree =  [[args.repository, "ORG-"+args.organization]]
+        get_deps(repo)
+
+        print(len(Ptree))
+
 
 def main():
     try:
