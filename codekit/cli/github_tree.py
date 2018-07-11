@@ -51,6 +51,73 @@ def parse_args():
     return parser.parse_args()
 
 
+def get_reposy():
+
+    global g
+    global reyali
+
+    RYo='lsst'
+    RYr='repos'
+
+    reyali = [[]] 
+
+    try:
+        lorgobj = g.get_organization(RYo)
+    except:
+        print("Problem accessing organization ", RYo)
+    else:
+        try:
+            lrepoobj = lorgobj.get_repo(RYr)
+        except:
+            print("Problem accessing repository ", RYr)
+        else:
+            ymlfile = "etc/repos.yaml"
+            rawfile = lrepoobj.get_file_contents(ymlfile).decoded_content
+            utf8file = rawfile.decode("utf-8")
+            listfile = utf8file.split('\n')
+            F = 'F'
+            l = 0
+            for line in listfile:
+                #print(len(line), ' -> ', line)
+                if len(line) != 0:
+                  if line[0] != '#':
+                    if F == 'T':
+                      spline = line.split(':')
+                      if spline[0] == '  url':
+                         spl2 = spline[2].split('/')
+                         reyali = reyali + [[tmpname, spl2[3], spl2[4].replace('.git', '')]]
+                         #print(reyali[l][0], '  --  ', reyali[l][1], '  --  ', reyali[l][2])
+                      else:
+                         #print('skip')
+                         F = 'F'
+                         l = l + 1
+                    else:
+                      spline = line.split(':')
+                      if len(spline) == 3:
+                         spl2 = spline[2].split('/')
+                         reyali = reyali + [[spline[0], spl2[3], spl2[4].replace('.git', '')]]
+                         #print(reyali[l][0], '  --  ', reyali[l][1], '  --  ', reyali[l][2])
+                         l = l + 1
+                      else:
+                         tmpname = spline[0]
+                         F = 'T'
+
+    return(reyali)
+
+
+def get_index(e):
+    global reyali
+
+    l = 0
+    for line in reyali:
+       if len(line) != 0:
+          if line[0] == e:
+             return(l+1)
+          else:
+             l = l + 1
+    return(-1)
+
+
 def get_deps(git_repo):
     depfile = "ups/" + git_repo.name + ".table"
     #
@@ -63,24 +130,32 @@ def get_deps(git_repo):
     #
     global i
     global Ptree
-    ltree = []
-    ldeps = []
+
     for line in table2:
       nodes=line.split('(')
       #if nodes[0] == "setupRequired":
       if nodes[0] in ("setupRequired", "setupOptional"):
-        child = nodes[1].replace(')','')
+        idx = get_index(nodes[1].replace(')',''))
+        #child = nodes[1].replace(')','')
+        child=reyali[idx][2]
+        Corg=reyali[idx][1]
         parent = git_repo.name
         if [child, parent] not in Ptree:
           i = i+1
-          print(i, child+",", parent)
+          #print(i, idx, child+"("+Corg+"), ", parent)
+          print("\r Analyzing... ".format(i)+str(i), end="")
           Ptree = Ptree + [[child, parent]]
           try:
-              depOBJ=org.get_repo(child)
+              COobj = g.get_organization(Corg)
           except:
-              print('Warning: Invalid dependency '+child+' in parent '+parent)
+              print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
           else:
-              get_deps(depOBJ)
+              try:
+                  depOBJ=COobj.get_repo(child)
+              except:
+                  print('Warning: Invalid dependency '+child+' in parent '+parent)
+              else:
+                  get_deps(depOBJ)
 
     return()
 
@@ -96,28 +171,36 @@ def run():
     global org
     global i
     global Ptree
+    global reyali
 
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
-    try:
-        org = g.get_organization(args.organization)
-    except:
-        print("Invalid organization ", args.organization)
+    get_reposy()
+    #print(len(reyali))   
+
+    rind = get_index(args.repository)
+
+    #print(rind, ' : ',reyali[rind][0], ' - ',reyali[rind][1], ' - ',reyali[rind][2])
+ 
+    Norg = reyali[rind][1]
+    Nrep = reyali[rind][2]
 
     try:
-        repo =  org.get_repo(args.repository)
+        org = g.get_organization(Norg)
     except:
-        print("Invalid repository ", args.repository)
+        print("Invalid organization ", Norg)
     else:
-        Ptree = [[]]
-  
-        i = 0
-
-        print(i, args.repository, "ORG-"+args.organization)
-        Ptree =  [[args.repository, "ORG-"+args.organization]]
-        get_deps(repo)
-
-        print(len(Ptree))
+        try:
+            repo =  org.get_repo(Nrep)
+        except:
+            print("Invalid repository ", Nrep)
+        else:
+            Ptree = [[]]
+            i = 0
+            print(i, Nrep, "ORG-"+Norg)
+            Ptree =  [[Nrep, "ORG-"+Norg]]
+            get_deps(repo)
+            print('\rFound ', len(Ptree), 'dependencies.')
 
 
 def main():
