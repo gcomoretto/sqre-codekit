@@ -159,6 +159,16 @@ def get_deps(git_repo):
 
     return()
 
+def dump():
+    global Ptree
+    F=open("ptree.dot", "w")
+    F.write("digraph G {\n")
+    #print(len(Ptree))
+    for record in Ptree:
+       if len(record)!=0:
+          F.write('    "'+record[0]+'" -> "'+record[1]+'";\n')
+    F.write("}\n")
+    F.close()
 
 
 def run():
@@ -201,6 +211,7 @@ def run():
             Ptree =  [[Nrep, "ORG-"+Norg]]
             get_deps(repo)
             print('\rFound ', len(Ptree), 'dependencies.')
+            dump()
 
 
 def main():
