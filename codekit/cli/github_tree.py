@@ -121,52 +121,63 @@ def get_index(e):
 def get_deps(git_repo):
     depfile = "ups/" + git_repo.name + ".table"
     #
-    table = git_repo.get_file_contents(depfile).decoded_content
-    #
-    table1 = table.decode("utf-8")
-    #
-    table2=table1.split('\n')
-    #print(table2)
-    #
-    global i
-    global Ptree
+    try:
+        table = git_repo.get_file_contents(depfile).decoded_content
+    except:
+        return()
+    else:
+       #
+       table1 = table.decode("utf-8")
+       #
+       table2=table1.split('\n')
+       #print(table2)
+       #
+       global i
+       global Ptree
 
-    for line in table2:
-      nodes=line.split('(')
-      #if nodes[0] == "setupRequired":
-      if nodes[0] in ("setupRequired", "setupOptional"):
-        idx = get_index(nodes[1].replace(')',''))
-        #child = nodes[1].replace(')','')
-        child=reyali[idx][2]
-        Corg=reyali[idx][1]
-        parent = git_repo.name
-        if [child, parent] not in Ptree:
-          i = i+1
-          #print(i, idx, child+"("+Corg+"), ", parent)
-          print("\r Analyzing... ".format(i)+str(i), end="")
-          Ptree = Ptree + [[child, parent]]
-          try:
-              COobj = g.get_organization(Corg)
-          except:
-              print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
-          else:
-              try:
-                  depOBJ=COobj.get_repo(child)
-              except:
-                  print('Warning: Invalid dependency '+child+' in parent '+parent)
-              else:
-                  get_deps(depOBJ)
-
+       for line in table2:
+         nodes=line.split('(')
+         #if nodes[0] == "setupRequired":
+         if nodes[0] in ("setupRequired", "setupOptional"):
+           idx = get_index(nodes[1].replace(')',''))
+           #child = nodes[1].replace(')','')
+           if idx == -1:
+              child=nodes[1].replace(')','')
+              Corg=deforg
+           else:
+              child=reyali[idx][2]
+              Corg=reyali[idx][1]
+           parent = git_repo.name
+           if [child, parent] not in Ptree:
+             i = i+1
+             #print(i, idx, child+"("+Corg+"), ", parent)
+             print("\r Analyzing... ".format(i)+str(i), end="")
+             Ptree = Ptree + [[child, parent]]
+             try:
+                 COobj = g.get_organization(Corg)
+             except:
+                 print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
+             else:
+                 try:
+                     depOBJ=COobj.get_repo(child)
+                 except:
+                     print('Warning: Invalid dependency '+child+' in parent '+parent)
+                 else:
+                     get_deps(depOBJ)
+   
     return()
 
-def dump():
+def dump(Rname):
     global Ptree
-    F=open("ptree.dot", "w")
+    fname=Rname+".dot"
+    print("Saving information in "+fname)
+    F=open(fname, "w")
     F.write("digraph G {\n")
+    F.write("    node [shape=box];")
     #print(len(Ptree))
     for record in Ptree:
        if len(record)!=0:
-          F.write('    "'+record[0]+'" -> "'+record[1]+'";\n')
+          F.write('    "'+record[1]+'" -> "'+record[0]+'";\n')
     F.write("}\n")
     F.close()
 
@@ -182,18 +193,24 @@ def run():
     global i
     global Ptree
     global reyali
+    global deforg
 
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
-    get_reposy()
-    #print(len(reyali))   
+    deforg = args.organization
+
+    get_reposy()   
 
     rind = get_index(args.repository)
 
     #print(rind, ' : ',reyali[rind][0], ' - ',reyali[rind][1], ' - ',reyali[rind][2])
- 
-    Norg = reyali[rind][1]
-    Nrep = reyali[rind][2]
+
+    if rind == -1:
+       Norg=args.organization
+       Nrep=args.repository
+    else: 
+       Norg = reyali[rind][1]
+       Nrep = reyali[rind][2]
 
     try:
         org = g.get_organization(Norg)
@@ -208,10 +225,10 @@ def run():
             Ptree = [[]]
             i = 0
             print(i, Nrep, "ORG-"+Norg)
-            Ptree =  [[Nrep, "ORG-"+Norg]]
+            #Ptree =  [[Nrep, "ORG-"+Norg]]
             get_deps(repo)
             print('\rFound ', len(Ptree), 'dependencies.')
-            dump()
+            dump(Nrep)
 
 
 def main():
