@@ -47,8 +47,26 @@ def parse_args():
         action='count',
         default=os.getenv('DM_SQUARE_DEBUG'),
         help='Debug mode (can specify several times)')
+    parser.add_argument(
+        '--team',
+        action='append',
+        help='include only git repos that are part of the provided team(s)')
     parser.add_argument('-v', '--version', action=codetools.ScmVersionAction)
     return parser.parse_args()
+
+def check_team(providedT, repoT):
+    if not repoT:
+       #print("a  --  Team error, return true")
+       return(False)
+    for t1 in providedT:
+       for t2 in repoT:
+          #print(">"+t1+"<", ">"+t2.name+"<")
+          if t1==t2.name:
+             #print("b  --  Team match, return True")
+             return(True)
+    #print("c  --  NO Team match, return False")
+    return(False)
+
 
 
 def get_reposy():
@@ -135,7 +153,11 @@ def get_deps(git_repo):
        global i
        global Ptree
 
+       parent = git_repo.name
+       sys.stdout.flush()
+       print("\r Analyzing... ".format(i)+str(i)+" ("+parent+")", end="")
        for line in table2:
+
          nodes=line.split('(')
          #if nodes[0] == "setupRequired":
          if nodes[0] in ("setupRequired", "setupOptional"):
@@ -147,12 +169,7 @@ def get_deps(git_repo):
            else:
               child=reyali[idx][2]
               Corg=reyali[idx][1]
-           parent = git_repo.name
            if [child, parent] not in Ptree:
-             i = i+1
-             #print(i, idx, child+"("+Corg+"), ", parent)
-             print("\r Analyzing... ".format(i)+str(i), end="")
-             Ptree = Ptree + [[child, parent]]
              try:
                  COobj = g.get_organization(Corg)
              except:
@@ -163,7 +180,27 @@ def get_deps(git_repo):
                  except:
                      print('Warning: Invalid dependency '+child+' in parent '+parent)
                  else:
-                     get_deps(depOBJ)
+                     if not Ts:
+                        i = i+1
+                        Ptree = Ptree + [[child, parent]]
+                        get_deps(depOBJ)
+                     else:
+                        #print("  ", child, end="")
+                        try:
+                            rteams=list(depOBJ.get_teams())
+                        except:
+                            rteams=[]
+                            #print("Error on teams for "+child)
+                            #i = i+1
+                            #Ptree = Ptree + [[child, parent]]
+                            #get_deps(depOBJ)
+                        #else:
+                        CK=check_team(Ts, rteams)
+                        #print(CK)
+                        if CK:
+                           i = i+1
+                           Ptree = Ptree + [[child, parent]]
+                           get_deps(depOBJ)
    
     return()
 
@@ -183,7 +220,7 @@ def dump(Rname):
 
 
 def run():
-    """List repos and teams"""
+    """List repos dependencies"""
     args = parse_args()
 
     codetools.setup_logging(args.debug)
@@ -194,10 +231,13 @@ def run():
     global Ptree
     global reyali
     global deforg
+    global Ts
 
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
     deforg = args.organization
+
+    Ts=args.team
 
     get_reposy()   
 
