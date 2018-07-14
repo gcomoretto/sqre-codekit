@@ -3,6 +3,7 @@
 from codekit.codetools import debug, error
 from codekit import codetools, pygithub
 from requests import get
+from time import sleep
 import argparse
 import github
 import os
@@ -83,6 +84,7 @@ def get_reposy():
         lorgobj = g.get_organization(RYo)
     except:
         print("Problem accessing organization ", RYo)
+        raise
     else:
         try:
             lrepoobj = lorgobj.get_repo(RYr)
@@ -137,6 +139,8 @@ def get_index(e):
 
 
 def get_deps(git_repo):
+    global swpkg
+
     depfile = "ups/" + git_repo.name + ".table"
     #
     try:
@@ -154,17 +158,15 @@ def get_deps(git_repo):
        global Ptree
 
        parent = git_repo.name
-       sys.stdout.flush()
-       print("\r Analyzing... ".format(i)+str(i)+" ("+parent+")", end="")
+       print('\r Analyzing... '.format(i)+str(i)+' ('+parent+')', end='', file=sys.stdout, flush=True)
        for line in table2:
 
          nodes=line.split('(')
-         #if nodes[0] == "setupRequired":
          if nodes[0] in ("setupRequired", "setupOptional"):
-           idx = get_index(nodes[1].replace(')',''))
-           #child = nodes[1].replace(')','')
+           tmp=nodes[1].split(')')
+           child=tmp[0]
+           idx = get_index(child)
            if idx == -1:
-              child=nodes[1].replace(')','')
               Corg=deforg
            else:
               child=reyali[idx][2]
@@ -175,33 +177,33 @@ def get_deps(git_repo):
              except:
                  print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
              else:
-                 try:
-                     depOBJ=COobj.get_repo(child)
-                 except:
-                     print('Warning: Invalid dependency '+child+' in parent '+parent)
-                 else:
-                     if not Ts:
-                        i = i+1
-                        Ptree = Ptree + [[child, parent]]
-                        get_deps(depOBJ)
-                     else:
-                        #print("  ", child, end="")
-                        try:
-                            rteams=list(depOBJ.get_teams())
-                        except:
-                            rteams=[]
-                            #print("Error on teams for "+child)
-                            #i = i+1
-                            #Ptree = Ptree + [[child, parent]]
-                            #get_deps(depOBJ)
-                        #else:
-                        CK=check_team(Ts, rteams)
-                        #print(CK)
-                        if CK:
-                           i = i+1
-                           Ptree = Ptree + [[child, parent]]
-                           get_deps(depOBJ)
-   
+                 if child != "sconsUtils":
+                   try:
+                      depOBJ=COobj.get_repo(child)
+                   except:
+                      print('Warning: Invalid dependency '+child+' in parent '+parent)
+                   else:
+                      if not Ts:
+                         i = i+1
+                         Ptree = Ptree + [[child, parent]]
+                         if child not in swpkg:
+                            swpkg.append(child)
+                            get_deps(depOBJ)
+                            sleep(1) 
+                      else:
+                         #print("  ", child, end="")
+                         try:
+                             rteams=list(depOBJ.get_teams())
+                         except:
+                             rteams=[]
+                         CK=check_team(Ts, rteams)
+                         if CK:
+                            i = i+1
+                            Ptree = Ptree + [[child, parent]]
+                            if child not in swpkg:
+                               swpkg.append(child)
+                               get_deps(depOBJ)
+                               sleep(1) 
     return()
 
 def dump(Rname):
@@ -210,7 +212,7 @@ def dump(Rname):
     print("Saving information in "+fname)
     F=open(fname, "w")
     F.write("digraph G {\n")
-    F.write("    node [shape=box];")
+    F.write("    node [shape=box];\n")
     #print(len(Ptree))
     for record in Ptree:
        if len(record)!=0:
@@ -232,6 +234,9 @@ def run():
     global reyali
     global deforg
     global Ts
+    global swpkg
+
+    swpkg = []
 
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
@@ -266,8 +271,9 @@ def run():
             i = 0
             print(i, Nrep, "ORG-"+Norg)
             #Ptree =  [[Nrep, "ORG-"+Norg]]
+            swpkg.append(Nrep)
             get_deps(repo)
-            print('\rFound ', len(Ptree), 'dependencies.')
+            print('\rFound ', len(Ptree)-1, 'dependencies and ', len(swpkg), 'SW products.')
             dump(Nrep)
 
 
