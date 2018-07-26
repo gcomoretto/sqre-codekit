@@ -22,7 +22,7 @@ def parse_args():
 
         Examples:
 
-            {prog} --org lsst --repo lsst_distrib
+            {prog} --org lsst --repo lsst_distrib --team "Data Management"
         """).format(prog=prog),
         epilog='Part of codekit: https://github.com/lsst-sqre/sqre-codekit')
     parser.add_argument(
@@ -275,7 +275,12 @@ def run():
             get_deps(repo)
             print('\rFound ', len(Ptree)-1, 'dependencies and ', len(swpkg), 'SW products.')
             dump(Nrep)
-
+    swfile=Nrep+".pkg"
+    FP=open(swfile, 'w')
+    for pkg in swpkg:
+       FP.write(pkg+'\n')
+    FP.close()
+    print("Recorded " + str(len(swpkg)) + " SW packages in "+swfile)
 
 def main():
     try:
