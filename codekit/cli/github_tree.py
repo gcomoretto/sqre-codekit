@@ -82,17 +82,20 @@ def get_reposy():
 
     try:
         lorgobj = g.get_organization(RYo)
+        sleep(1)
     except:
         print("Problem accessing organization ", RYo)
         raise
     else:
         try:
             lrepoobj = lorgobj.get_repo(RYr)
+            sleep(1)
         except:
             print("Problem accessing repository ", RYr)
         else:
             ymlfile = "etc/repos.yaml"
             rawfile = lrepoobj.get_file_contents(ymlfile).decoded_content
+            sleep(1)
             utf8file = rawfile.decode("utf-8")
             listfile = utf8file.split('\n')
             F = 'F'
@@ -145,6 +148,7 @@ def get_deps(git_repo):
     #
     try:
         table = git_repo.get_file_contents(depfile).decoded_content
+        sleep(1)
     except:
         return()
     else:
@@ -174,12 +178,14 @@ def get_deps(git_repo):
            if [child, parent] not in Ptree:
              try:
                  COobj = g.get_organization(Corg)
+                 sleep(1)
              except:
                  print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
              else:
                  if child != "sconsUtils":
                    try:
                       depOBJ=COobj.get_repo(child)
+                      sleep(1)
                    except:
                       print('Warning: Invalid dependency '+child+' in parent '+parent)
                    else:
@@ -189,11 +195,11 @@ def get_deps(git_repo):
                          if child not in swpkg:
                             swpkg.append(child)
                             get_deps(depOBJ)
-                            sleep(1) 
                       else:
                          #print("  ", child, end="")
                          try:
                              rteams=list(depOBJ.get_teams())
+                             sleep(1)
                          except:
                              rteams=[]
                          CK=check_team(Ts, rteams)
@@ -203,7 +209,6 @@ def get_deps(git_repo):
                             if child not in swpkg:
                                swpkg.append(child)
                                get_deps(depOBJ)
-                               sleep(1) 
     return()
 
 def dump(Rname):
@@ -259,11 +264,13 @@ def run():
 
     try:
         org = g.get_organization(Norg)
+        sleep(1)
     except:
         print("Invalid organization ", Norg)
     else:
         try:
             repo =  org.get_repo(Nrep)
+            sleep(1)
         except:
             print("Invalid repository ", Nrep)
         else:
@@ -275,7 +282,7 @@ def run():
             get_deps(repo)
             print('\rFound ', len(Ptree)-1, 'dependencies and ', len(swpkg), 'SW products.')
             dump(Nrep)
-    swfile=Nrep+".pkg"
+    swfile=Nrep+".pkg.txt"
     FP=open(swfile, 'w')
     for pkg in swpkg:
        FP.write(pkg+'\n')
