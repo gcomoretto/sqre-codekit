@@ -82,6 +82,7 @@ def get_reposy():
 
     try:
         lorgobj = g.get_organization(RYo)
+        print(".", end="")
         sleep(1)
     except:
         print("Problem accessing organization ", RYo)
@@ -89,12 +90,14 @@ def get_reposy():
     else:
         try:
             lrepoobj = lorgobj.get_repo(RYr)
+            print(".", end="")
             sleep(1)
         except:
             print("Problem accessing repository ", RYr)
         else:
             ymlfile = "etc/repos.yaml"
             rawfile = lrepoobj.get_file_contents(ymlfile).decoded_content
+            print(".", end="")
             sleep(1)
             utf8file = rawfile.decode("utf-8")
             listfile = utf8file.split('\n')
@@ -143,11 +146,13 @@ def get_index(e):
 
 def get_deps(git_repo):
     global swpkg
+    global allpkg
 
     depfile = "ups/" + git_repo.name + ".table"
     #
     try:
         table = git_repo.get_file_contents(depfile).decoded_content
+        print(".", end="")
         sleep(1)
     except:
         return()
@@ -170,6 +175,9 @@ def get_deps(git_repo):
            tmp=nodes[1].split(')')
            child=tmp[0]
            idx = get_index(child)
+           if [child, parent] not in allpkg:
+              allpkg = allpkg + [[child, parent]]
+              #print(child, parent)
            if idx == -1:
               Corg=deforg
            else:
@@ -178,6 +186,7 @@ def get_deps(git_repo):
            if [child, parent] not in Ptree:
              try:
                  COobj = g.get_organization(Corg)
+                 print(".", end="")
                  sleep(1)
              except:
                  print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
@@ -185,6 +194,7 @@ def get_deps(git_repo):
                  if child != "sconsUtils":
                    try:
                       depOBJ=COobj.get_repo(child)
+                      print(".", end="")
                       sleep(1)
                    except:
                       print('Warning: Invalid dependency '+child+' in parent '+parent)
@@ -199,6 +209,7 @@ def get_deps(git_repo):
                          #print("  ", child, end="")
                          try:
                              rteams=list(depOBJ.get_teams())
+                             print(".", end="")
                              sleep(1)
                          except:
                              rteams=[]
@@ -240,9 +251,11 @@ def run():
     global deforg
     global Ts
     global swpkg
+    global allpkg
+
 
     swpkg = []
-
+    allpkg = [[]]
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
     deforg = args.organization
@@ -280,14 +293,21 @@ def run():
             #Ptree =  [[Nrep, "ORG-"+Norg]]
             swpkg.append(Nrep)
             get_deps(repo)
-            print('\rFound ', len(Ptree)-1, 'dependencies and ', len(swpkg), 'SW products.')
+            print('\rFound ', len(Ptree)-1, 'DM dependencies and ', len(swpkg), 'SW products, ', len(allpkg) , 'dependencied including 3rd party pkgs.')
             dump(Nrep)
     swfile=Nrep+".pkg.txt"
     FP=open(swfile, 'w')
     for pkg in swpkg:
        FP.write(pkg+'\n')
     FP.close()
-    print("Recorded " + str(len(swpkg)) + " SW packages in "+swfile)
+    apfile=Nrep+"All.pkg.txt"
+    AP=open(apfile, 'w')
+    for line in allpkg:
+       #print(line)
+       for pkg in line:
+          AP.write(pkg + ", ")
+       AP.write('\n')
+    AP.close()
 
 def main():
     try:
