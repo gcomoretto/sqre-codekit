@@ -146,7 +146,6 @@ def get_index(e):
 
 def get_deps(git_repo):
     global swpkg
-    global allpkg
 
     depfile = "ups/" + git_repo.name + ".table"
     #
@@ -175,9 +174,6 @@ def get_deps(git_repo):
            tmp=nodes[1].split(')')
            child=tmp[0]
            idx = get_index(child)
-           if [child, parent] not in allpkg:
-              allpkg = allpkg + [[child, parent]]
-              #print(child, parent)
            if idx == -1:
               Corg=deforg
            else:
@@ -224,7 +220,8 @@ def get_deps(git_repo):
 
 def dump(Rname):
     global Ptree
-    fname=Rname+".dot"
+    global folder
+    fname=folder+Rname+".dot"
     print("Saving information in "+fname)
     F=open(fname, "w")
     F.write("digraph G {\n")
@@ -251,11 +248,17 @@ def run():
     global deforg
     global Ts
     global swpkg
-    global allpkg
+    global folder
 
+    folder = "dot_files/"
+
+    try:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+    except OSError:
+        print ('Error: Creating directory. ' +  folder)
 
     swpkg = []
-    allpkg = [[]]
     g = pygithub.login_github(token_path=args.token_path, token=args.token)
 
     deforg = args.organization
@@ -293,21 +296,14 @@ def run():
             #Ptree =  [[Nrep, "ORG-"+Norg]]
             swpkg.append(Nrep)
             get_deps(repo)
-            print('\rFound ', len(Ptree)-1, 'DM dependencies and ', len(swpkg), 'SW products, ', len(allpkg) , 'dependencied including 3rd party pkgs.')
+            print('\rFound ', len(Ptree)-1, 'DM dependencies and ', len(swpkg), 'SW products, ')
             dump(Nrep)
-    swfile=Nrep+".pkg.txt"
+    swfile=folder+Nrep+".pkg.txt"
     FP=open(swfile, 'w')
     for pkg in swpkg:
        FP.write(pkg+'\n')
     FP.close()
-    apfile=Nrep+"All.pkg.txt"
-    AP=open(apfile, 'w')
-    for line in allpkg:
-       #print(line)
-       for pkg in line:
-          AP.write(pkg + ", ")
-       AP.write('\n')
-    AP.close()
+    apfile=folder+Nrep+"All.pkg.txt"
 
 def main():
     try:
