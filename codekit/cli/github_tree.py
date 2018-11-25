@@ -10,6 +10,7 @@ import os
 import sys
 import textwrap
 
+
 def parse_args():
     """Parse command-line arguments"""
     prog = 'github-tree'
@@ -52,8 +53,14 @@ def parse_args():
         '--team',
         action='append',
         help='include only git repos that are part of the provided team(s)')
+    parser.add_argument(
+        '--exclusion-file', '-exf',
+        default='exclusions.txt',
+        dest='exclusion_file',
+        help='the file where all packages to exclude are listed')
     parser.add_argument('-v', '--version', action=codetools.ScmVersionAction)
     return parser.parse_args()
+
 
 def check_team(providedT, repoT):
     if not repoT:
@@ -67,7 +74,6 @@ def check_team(providedT, repoT):
              return(True)
     #print("c  --  NO Team match, return False")
     return(False)
-
 
 
 def get_reposy():
@@ -146,6 +152,13 @@ def get_index(e):
 
 def get_deps(git_repo):
     global swpkg
+    global excluded_pkgs
+    global i
+    global Ptree
+    global pkgtree
+
+
+    pkgdeps = []
 
     depfile = "ups/" + git_repo.name + ".table"
     #
@@ -162,16 +175,17 @@ def get_deps(git_repo):
        table2=table1.split('\n')
        #print(table2)
        #
-       global i
-       global Ptree
 
        parent = git_repo.name
+
        print('\r Analyzing... '.format(i)+str(i)+' ('+parent+')', end='', file=sys.stdout, flush=True)
        for line in table2:
 
          nodes=line.split('(')
          if nodes[0] in ("setupRequired", "setupOptional"):
            tmp=nodes[1].split(')')
+           child=tmp[0]
+           tmp=child.split(' ')
            child=tmp[0]
            idx = get_index(child)
            if idx == -1:
@@ -187,7 +201,9 @@ def get_deps(git_repo):
              except:
                  print('Warning: Invalid dependency organization '+Corg+'-'+child+' in parent '+parent)
              else:
-                 if child != "sconsUtils":
+                 #if child != "sconsUtils":
+                 if child not in excluded_pkgs:
+                   #print('>', parent, ' -> ', child)
                    try:
                       depOBJ=COobj.get_repo(child)
                       print(".", end="")
@@ -196,6 +212,7 @@ def get_deps(git_repo):
                       print('Warning: Invalid dependency '+child+' in parent '+parent)
                    else:
                       if not Ts:
+                         pkgdeps.append(child)
                          i = i+1
                          Ptree = Ptree + [[child, parent]]
                          if child not in swpkg:
@@ -211,12 +228,15 @@ def get_deps(git_repo):
                              rteams=[]
                          CK=check_team(Ts, rteams)
                          if CK:
+                            pkgdeps.append(child)
                             i = i+1
                             Ptree = Ptree + [[child, parent]]
                             if child not in swpkg:
                                swpkg.append(child)
                                get_deps(depOBJ)
+    pkgtree[parent] = pkgdeps
     return()
+
 
 def dump(Rname):
     global Ptree
@@ -233,10 +253,94 @@ def dump(Rname):
     F.write("}\n")
     F.close()
 
+def get_exclusions(input_file):
+    f = open(input_file, 'r')
+
+    excluded = []
+ 
+    for line in f:
+        #print(line)
+        excluded.append(line.rstrip())
+    f.close()
+    return(excluded)
+
+
+def order_pkg(pkg):
+    global pkg_parents
+    global ordered_pkgs
+
+    for lpkg in pkg_parents:
+        if pkg == lpkg:
+            if pkg_parents[pkg] not in ordered_pkgs:
+                order_pkg(pkg_parents[pkg])
+                ordered_pkgs.append(pkg)
+                #print(pkg, 'parent: ', pkg_parents[pkg])
+            else:
+                if pkg not in ordered_pkgs:
+                    ordered_pkgs.append(pkg)
+                    #print(pkg, 'parent: ', pkg_parents[pkg])
+
+
+def makeTree(product):
+    global pkgtree
+    global swpkg
+    global folder
+    global pkg_parents
+    global ordered_pkgs
+
+    ordered_pkgs = []
+    ordered_pkgs.append(product)
+    pkg_parents = {}
+
+    lpkgs = []
+    lpkgtree = {}
+
+    # remove duplicated dependencies
+    for parent in pkgtree:
+        ldeps = []
+        for pkg in pkgtree[parent]:
+            #print(parent, ' - ', pkg)
+            if pkg not in lpkgs:
+                ldeps.append(pkg)
+                lpkgs.append(pkg)
+                pkg_parents[pkg] = parent
+        lpkgtree[parent] = ldeps
+
+    for pkg in pkg_parents:
+        if pkg_parents[pkg] not in ordered_pkgs:
+            order_pkg(pkg_parents[pkg])
+            ordered_pkgs.append(pkg)
+            #print(pkg, 'parent: ', pkg_parents[pkg])
+        else:
+            if pkg not in ordered_pkgs:
+                ordered_pkgs.append(pkg)
+                #print(pkg, 'parent: ', pkg_parents[pkg])
+
+    fname = folder + product + '.tree.csv'
+    F = open(fname, 'w')
+    F.write('"#","product key","short name","Parent","","","","","",""\n')
+    #F.write('"1","' + product + '","' + product + '","","","","","","",""\n')
+    count = 1
+    for pkg in ordered_pkgs:
+        if pkg == product:
+            line='"' + str(count) + '","' + pkg + '","' + pkg + '","","","","","","",""\n'
+        else:
+            line='"' + str(count) + '","' + pkg + '","' + pkg + '","' + pkg_parents[pkg] + '","","","","","",""\n'
+        #F.write('"' + str(count) + '","' + pkg + '","' + pkg + '","' + pkg_parents[pkg] + '","","","","","",""\n')
+        print(line)
+        F.write(line)
+        count = count + 1
+    #for parent in pkgtree:
+    #    #print(parent, ' - ', lpkgtree[parent])
+    #    for pkg in pkgtree[parent]:
+    #        F.write('"' + str(count) + '","' + pkg + '","' + pkg + '","' + parent + '","","","","","",""\n')
+    #        count = count + 1
+    F.close()
 
 def run():
     """List repos dependencies"""
     args = parse_args()
+
 
     codetools.setup_logging(args.debug)
 
@@ -249,6 +353,19 @@ def run():
     global Ts
     global swpkg
     global folder
+    global excluded_pkgs
+    global pkgtree
+
+    pkgtree = {}
+
+    if os.path.isfile(args.exclusion_file):
+        print('Excluded pkgs in ', args.exclusion_file)
+        excluded_pkgs = get_exclusions(args.exclusion_file)
+    else:
+        print('No exclusions found (', args.exclusion_file,')')
+        excluded_pkgs = []
+
+    #print('Excldue: ', excluded_pkgs)
 
     folder = "dot_files/"
 
@@ -298,12 +415,14 @@ def run():
             get_deps(repo)
             print('\rFound ', len(Ptree)-1, 'DM dependencies and ', len(swpkg), 'SW products, ')
             dump(Nrep)
+            makeTree(Nrep)
     swfile=folder+Nrep+".pkg.txt"
     FP=open(swfile, 'w')
     for pkg in swpkg:
        FP.write(pkg+'\n')
     FP.close()
     apfile=folder+Nrep+"All.pkg.txt"
+
 
 def main():
     try:
